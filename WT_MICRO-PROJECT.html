@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Energy Consumption Visualizer</title>
+
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+:root {
+    --bg: #E8F4EC;
+    --card: #ffffff;
+    --text: #1C352D;
+    --accent: #2F5D42;
+    --gold: #C6A667;
+    --shadow: rgba(0,0,0,0.1);
+}
+
+.dark {
+    --bg: #1E2A1F;
+    --card: #2C3A2D;
+    --text: #E4EDE7;
+    --accent: #9BC8A7;
+    --gold: #D8C07A;
+    --shadow: rgba(0,0,0,0.4);
+}
+
+body {
+    margin: 0;
+    font-family: "Poppins", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    transition: 0.3s ease;
+}
+
+nav {
+    background: var(--card);
+    box-shadow: 0 2px 10px var(--shadow);
+    padding: 14px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+nav .title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+nav a {
+    margin: 0 18px;
+    font-size: 16px;
+    text-decoration: none;
+    color: var(--text);
+    cursor: pointer;
+}
+
+nav a:hover { color: var(--accent); }
+
+.section {
+    display: none;
+    padding: 40px;
+}
+
+.active { display: block; }
+
+.card {
+    background: var(--card);
+    padding: 25px;
+    border-radius: 14px;
+    box-shadow: 0 4px 16px var(--shadow);
+    margin-bottom: 25px;
+}
+
+.dashboard-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.dashboard-card {
+    flex: 1;
+    min-width: 250px;
+}
+
+button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+button:hover { background: var(--gold); }
+
+input, select {
+    width: 100%;
+    padding: 12px;
+    margin: 12px 0;
+    border-radius: 10px;
+    border: 2px solid var(--accent);
+    background: var(--card);
+    color: var(--text);
+}
+</style>
+</head>
+<body>
+
+<nav>
+    <div class="title">🌱 Energy Visualizer</div>
+    <div>
+        <a onclick="showSection('home')">Home</a>
+        <a onclick="showSection('about')">About</a>
+        <a onclick="showSection('calculator')">Calculator</a>
+        <a onclick="showSection('settings')">Settings</a>
+    </div>
+</nav>
+
+<div id="home" class="section active">
+
+    <div class="dashboard-row">
+        <div class="card dashboard-card">
+            <h3>Total Energy Consumed</h3>
+            <p id="totalEnergy">0.00 kWh</p>
+        </div>
+
+        <div class="card dashboard-card">
+            <h3>Total Cost</h3>
+            <p id="totalCost">₹0.00</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Historical Energy Usage 📈</h2>
+        <canvas id="energyChart" height="100"></canvas>
+    </div>
+
+    <div class="card">
+        <h2>Welcome to the Energy Consumption Visualizer 🌿</h2>
+        <p>This tool helps you calculate the electricity consumed by your household devices.</p>
+        <button onclick="showSection('calculator')">Start Calculating</button>
+    </div>
+</div>
+
+<div id="about" class="section">
+    <div class="card">
+        <h2>About This Project</h2>
+        <p>The Energy Consumption Visualizer is a front-end web application designed to calculate and display the 
+            energy usage of common household appliances. Users can add devices, specify wattage and usage hours, and 
+            instantly view the resulting kWh and cost estimations. This project demonstrates HTML5 structure, CSS3 UI 
+            styling, and JavaScript for dynamic behavior.
+        </p>
+    </div>
+</div>
+
+<div id="calculator" class="section">
+    <div class="card">
+        <h2>Energy Calculator ⚡</h2>
+
+        <label>Choose Device:</label>
+        <select id="device" onchange="autoFill()">
+            <option value="">-- Select --</option>
+            <option value="60">Fan (60W)</option>
+            <option value="200">TV (200W)</option>
+            <option value="1000">Iron Box (1000W)</option>
+            <option value="1500">Heater (1500W)</option>
+            <option value="custom">Custom Device</option>
+        </select>
+
+        <label>Wattage (W):</label>
+        <input type="number" id="watt" placeholder="Enter watts">
+
+        <label>Hours Used:</label>
+        <input type="number" id="hrs" placeholder="Hours used">
+
+        <label>Quantity:</label>
+        <input type="number" id="qty" placeholder="Number of devices" value="1" min="1">
+
+        <button onclick="calculateEnergy()">Calculate</button>
+
+        <div class="card" id="result" style="display:none; margin-top:20px;"></div>
+    </div>
+</div>
+
+<div id="settings" class="section">
+    <div class="card">
+        <h2>Settings ⚙️</h2>
+        <button onclick="toggleTheme()">Toggle Dark Mode</button>
+    </div>
+</div>
+
+<script>
+
+function showSection(id) {
+    document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+}
+
+function autoFill() {
+    let dev = document.getElementById('device').value;
+    document.getElementById('watt').value = dev === "custom" ? "" : dev;
+}
+
+let cumulativeEnergy = 0;
+let cumulativeCost = 0;
+const RATE = 8;
+
+let labels = [];
+let energyData = [];
+
+const ctx = document.getElementById('energyChart').getContext('2d');
+let energyChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: "Energy Usage (kWh)",
+            data: energyData,
+            borderWidth: 3,
+            tension: 0.3
+        }]
+    }
+});
+
+function calculateEnergy() {
+    let w = parseFloat(document.getElementById('watt').value);
+    let h = parseFloat(document.getElementById('hrs').value);
+    let q = parseFloat(document.getElementById('qty').value);
+
+    if (!w || !h || !q || q <= 0) {
+        alert("Please enter watt, hours and a valid quantity.");
+        return;
+    }
+
+    let kwh = (w * h * q) / 1000;
+    let cost = kwh * RATE;
+
+    cumulativeEnergy += kwh;
+    cumulativeCost += cost;
+
+    document.getElementById("totalEnergy").textContent = cumulativeEnergy.toFixed(2) + " kWh";
+    document.getElementById("totalCost").textContent = "₹" + cumulativeCost.toFixed(2);
+
+    labels.push("Entry " + (labels.length + 1));
+    energyData.push(kwh);
+    energyChart.update();
+
+    document.getElementById('result').innerHTML = `
+        <h3>Results</h3>
+        <p><b>Current:</b> ${kwh.toFixed(2)} kWh | ₹${cost.toFixed(2)}</p>
+        <hr>
+        <p><b>Cumulative:</b> ${cumulativeEnergy.toFixed(2)} kWh | ₹${cumulativeCost.toFixed(2)}</p>
+    `;
+    document.getElementById('result').style.display = "block";
+}
+
+function toggleTheme() {
+    document.body.classList.toggle('dark');
+}
+</script>
+
+</body>
+</html>
